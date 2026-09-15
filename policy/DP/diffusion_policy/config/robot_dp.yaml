@@ -10,9 +10,9 @@ task_name: ${task.name}
 shape_meta: ${task.shape_meta}
 exp_name: "default"
 
-horizon: 8
-n_obs_steps: 3
-n_action_steps: 6
+horizon: 16
+n_obs_steps: 2
+n_action_steps: 8
 n_latency_steps: 0
 dataset_obs_steps: ${n_obs_steps}
 past_action_visible: False
@@ -56,7 +56,7 @@ policy:
   obs_as_global_cond: ${obs_as_global_cond}
   # crop_shape: null
   diffusion_step_embed_dim: 128
-  # down_dims: [512, 1024, 2048]
+  # Keep the RoboTwin DP UNet. [512, 1024, 2048] fits a 4090 but changes the policy.
   down_dims: [256, 512, 1024]
   kernel_size: 5
   n_groups: 8
@@ -74,6 +74,8 @@ ema:
   max_value: 0.9999
 
 dataloader:
+  # Head-only 240x320: target microbatch ~128 (was 32 x3-cam ≈ effective 64 with accumulate 2).
+  # Keep peak VRAM under ~18GB on 4090; if OOM, drop to 96 or 64+accumulate 2.
   batch_size: 128
   num_workers: 0
   shuffle: True
@@ -98,11 +100,12 @@ training:
   device: "cuda:0"
   seed: 42
   debug: False
-  resume: True
+  resume: False # resume training from checkpoint
   # optimization
   lr_scheduler: cosine
   lr_warmup_steps: 500
-  num_epochs: 600
+  num_epochs: 150
+  # Effective batch = batch_size * this. With batch_size 128 use 1 → effective 128.
   gradient_accumulate_every: 1
   # EMA destroys performance when used with BatchNorm
   # replace BatchNorm with GroupNorm.
@@ -110,9 +113,9 @@ training:
   freeze_encoder: False
   # training loop control
   # in epochs
-  rollout_every: 50
-  checkpoint_every: 600
-  val_every: 1
+  rollout_every: 50 # not used
+  checkpoint_every: 50
+  val_every: 10
   sample_every: 5
   # steps per epoch
   max_train_steps: null

@@ -46,7 +46,8 @@ def main():
     zarr_data = zarr_root.create_group("data")
     zarr_meta = zarr_root.create_group("meta")
 
-    head_camera_arrays, left_camera_arrays, right_camera_arrays = [], [], []
+    # Head-only: training/deploy use cam_head only (wrist may still exist in HDF5).
+    head_camera_arrays = []
     episode_ends_arrays, action_arrays, state_arrays = ([], [], [],)
 
     while current_episode < expert_data_num:
@@ -60,8 +61,6 @@ def main():
 
         for j in range(0, state_all.shape[0]):
             head_img_bit = data['vision']['cam_head']['colors'][j]
-            left_img_bit = data['vision']['cam_left_wrist']['colors'][j]
-            right_img_bit = data['vision']['cam_right_wrist']['colors'][j]
 
             state, action = state_all[j], action_all[j]
 
@@ -70,19 +69,7 @@ def main():
             head_img = cv2.resize(head_img, (320, 240), interpolation=cv2.INTER_AREA)  # (W, H)
             assert head_img.shape == (240, 320, 3)
 
-            left_img = decode_image_bit(left_img_bit)
-            assert left_img.ndim == 3 and left_img.shape[-1] == 3, f"Expected HxWx3, got {left_img.shape}"
-            left_img = cv2.resize(left_img, (320, 240), interpolation=cv2.INTER_AREA)  # (W, H)
-            assert left_img.shape == (240, 320, 3)
-
-            right_img = decode_image_bit(right_img_bit)
-            assert right_img.ndim == 3 and right_img.shape[-1] == 3, f"Expected HxWx3, got {right_img.shape}"
-            right_img = cv2.resize(right_img, (320, 240), interpolation=cv2.INTER_AREA)  # (W, H)
-            assert right_img.shape == (240, 320, 3)
-
             head_camera_arrays.append(head_img)
-            left_camera_arrays.append(left_img)
-            right_camera_arrays.append(right_img)
             state_arrays.append(state)
             action_arrays.append(action)
 
@@ -98,22 +85,12 @@ def main():
     head_camera_arrays = np.array(head_camera_arrays)
     head_camera_arrays = np.moveaxis(head_camera_arrays, -1, 1)  # NHWC -> NCHW
 
-    left_camera_arrays = np.array(left_camera_arrays)
-    left_camera_arrays = np.moveaxis(left_camera_arrays, -1, 1)  # NHWC -> NCHW
-
-    right_camera_arrays = np.array(right_camera_arrays)
-    right_camera_arrays = np.moveaxis(right_camera_arrays, -1, 1)  # NHWC -> NCHW
-
     compressor = zarr.Blosc(cname="zstd", clevel=3, shuffle=1)
     action_chunk_size = (100, action_arrays.shape[1])
     state_chunk_size = (100, state_arrays.shape[1])
     head_camera_chunk_size = (100, *head_camera_arrays.shape[1:])
-    left_camera_chunk_size = (100, *left_camera_arrays.shape[1:])
-    right_camera_chunk_size = (100, *right_camera_arrays.shape[1:])
 
     zarr_data.create_dataset("head_camera", data=head_camera_arrays, chunks=head_camera_chunk_size, overwrite=True, compressor=compressor,)
-    zarr_data.create_dataset("left_camera", data=left_camera_arrays, chunks=left_camera_chunk_size, overwrite=True, compressor=compressor,)
-    zarr_data.create_dataset("right_camera", data=right_camera_arrays, chunks=right_camera_chunk_size, overwrite=True, compressor=compressor,)
     zarr_data.create_dataset("state", data=state_arrays, chunks=state_chunk_size, dtype="float32", overwrite=True, compressor=compressor,)
     zarr_data.create_dataset("action", data=action_arrays, chunks=action_chunk_size,dtype="float32", overwrite=True, compressor=compressor,)
     zarr_meta.create_dataset("episode_ends", data=episode_ends_arrays, dtype="int64", overwrite=True, compressor=compressor,)

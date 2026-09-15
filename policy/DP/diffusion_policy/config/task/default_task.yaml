@@ -3,22 +3,19 @@ name: task_config
 image_shape: &image_shape [3, 240, 320]
 shape_meta: &shape_meta
   # acceptable types: rgb, low_dim
+  # Head-only RGB for new training/deploy (π3 close and later).
+  # Existing 3-cam checkpoints still load their own shape_meta from the ckpt.
   obs:
     head_cam:
       shape: *image_shape
       type: rgb
+    # left_cam / right_cam disabled for head-only training.
     # front_cam:
     #   shape: *image_shape
     #   type: rgb
-    # left_cam:
-    #   shape: *image_shape
-    #   type: rgb
-    # right_cam:
-    #   shape: *image_shape
-    #   type: rgb
-    # agent_pos:
-    #   shape: null
-    #   type: low_dim
+    agent_pos:
+      shape: null
+      type: low_dim
   action:
     shape: null
 

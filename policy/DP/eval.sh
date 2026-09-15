@@ -23,7 +23,11 @@ CLIENT_SCRIPT="${SCRIPT_DIR}/setup_eval_env_client.sh"
 policy_server_port=$(bash "${UTILS_DIR}/get_free_port.sh")
 policy_server_ip="localhost"
 
-additional_info="ckpt_name=${ckpt_name},action_type=${action_type}"
+# bench_name doubles as task_config for cabinet_chain_* (must match training DR yaml).
+task_config="${TASK_CONFIG:-${bench_name}}"
+test_num="${TEST_NUM:-10}"
+additional_info="ckpt_name=${ckpt_name},action_type=${action_type},test_num=${test_num},task_config=${task_config}"
+echo "[MAIN] task_config=${task_config}, test_num=${test_num}"
 
 # Define cleanup to terminate background processes when the script exits
 cleanup(){ [[ -n "${SERVER_PID:-}" ]] && echo -e "\033[31m[CLEANUP] Killing server PID=${SERVER_PID}\033[0m" && kill "${SERVER_PID}" 2>/dev/null || true; }
