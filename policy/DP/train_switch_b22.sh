@@ -21,7 +21,10 @@ OUTPUT_DIR="${OUTPUT_DIR:-${BENCH_ROOT}/checkpoints/switch_b22_lora/${STAMP}}"
 DEVICE="${VLM_DEVICE:-cuda:0}"
 
 source "$(conda info --base)/etc/profile.d/conda.sh"
+# conda activate hooks may touch unset vars under `set -u`
+set +u
 conda activate xpl_vlm
+set -u
 cd "${BENCH_ROOT}"
 
 python scripts/switchers/train_vlm_switch_lora.py \

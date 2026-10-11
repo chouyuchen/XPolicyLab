@@ -16,7 +16,10 @@ POLICY_GPU="${POLICY_GPU:-0}"
 OUTPUT_DIR="${OUTPUT_DIR:-}"
 
 source "$(conda info --base)/etc/profile.d/conda.sh"
+# conda activate hooks (e.g. cuda-nvcc) touch unset vars under `set -u`
+set +u
 conda activate RoboTwin
+set -u
 cd "${BENCH_ROOT}"
 
 extra=()

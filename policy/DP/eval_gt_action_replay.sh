@@ -18,7 +18,9 @@ XPL_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 BENCH_ROOT="$(cd "${XPL_ROOT}/.." && pwd)"
 
 source "$(conda info --base)/etc/profile.d/conda.sh"
+set +u
 conda activate "${EVAL_CONDA_ENV}"
+set -u
 
 SAVE_VIDEOS=${SAVE_VIDEOS:-1}
 VIDEO_ARGS=()

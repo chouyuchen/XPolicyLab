@@ -21,7 +21,10 @@ yaml_file="${XPL_ROOT}/policy/${policy_name}/deploy.yml"
 echo "[SERVER] policy=${policy_name}, task=${task_name}, policy_server_port=${policy_server_port}"
 
 source "$(conda info --base)/etc/profile.d/conda.sh"
+# conda activate/deactivate hooks (cuda-nvcc, gcc) touch unset vars under `set -u`
+set +u
 conda activate "${policy_conda_env}"
+set -u
 
 exec env \
     PYTHONWARNINGS=ignore::UserWarning \

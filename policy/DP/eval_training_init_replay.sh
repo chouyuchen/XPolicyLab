@@ -49,7 +49,9 @@ SERVER_PID=$!
 bash "${UTILS_DIR}/wait_for_policy_server.sh" "${policy_server_ip}" "${policy_server_port}" "${SERVER_PID}" "Policy server" 1200
 
 source "$(conda info --base)/etc/profile.d/conda.sh"
+set +u
 conda activate "${EVAL_CONDA_ENV}"
+set -u
 
 SAVE_VIDEOS=${SAVE_VIDEOS:-0}
 VIDEO_ARGS=()
