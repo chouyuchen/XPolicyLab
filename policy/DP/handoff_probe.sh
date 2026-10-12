@@ -18,7 +18,7 @@ STEP_BUDGET="${STEP_BUDGET:-600}"
 OUTPUT_DIR="${OUTPUT_DIR:-}"
 # ARM: left|right (default: left for load, right for close — see handoff_probe.py).
 ARM="${ARM:-}"
-# DRAWER_FRAC_RANGE: "LO HI" handoff drawer fraction (default: load 0.5 0.9).
+# DRAWER_FRAC_RANGE: "LO HI" or "LO,HI" handoff drawer fraction (default: load 0.5 0.9).
 DRAWER_FRAC_RANGE="${DRAWER_FRAC_RANGE:-}"
 # PLAN_ONLY=1: setup + sampling + move only, no policy server (dry run).
 PLAN_ONLY="${PLAN_ONLY:-0}"
@@ -26,6 +26,9 @@ PLAN_ONLY="${PLAN_ONLY:-0}"
 PLAN_ATTEMPTS="${PLAN_ATTEMPTS:-1}"
 # SAMPLER: box (default) | release (pi1's measured mean release pose, load/left only).
 SAMPLER="${SAMPLER:-box}"
+# SAVE_MASKED=1: also save the robot-masked head frame + mask at the handoff
+# (img/seed<seed>_masked.png, mask/seed<seed>.png) for the image-value feature sets.
+SAVE_MASKED="${SAVE_MASKED:-0}"
 
 if [[ "${SKILL}" != "load" && "${SKILL}" != "close" ]]; then
   echo "[PROBE] SKILL must be load or close (got '${SKILL}')" >&2
@@ -68,9 +71,10 @@ RUN_ARGS=(
   --sampler "${SAMPLER}"
 )
 [[ -n "${ARM}" ]] && RUN_ARGS+=(--arm "${ARM}")
-# Unquoted on purpose: DRAWER_FRAC_RANGE="0.5 0.9" must split into two argv entries.
-[[ -n "${DRAWER_FRAC_RANGE}" ]] && RUN_ARGS+=(--drawer-frac-range ${DRAWER_FRAC_RANGE})
+# Unquoted on purpose: "0.5 0.9" / "0.5,0.9" must split into two argv entries.
+[[ -n "${DRAWER_FRAC_RANGE}" ]] && RUN_ARGS+=(--drawer-frac-range ${DRAWER_FRAC_RANGE//,/ })
 [[ "${PLAN_ONLY}" == "1" ]] && RUN_ARGS+=(--plan-only)
+[[ "${SAVE_MASKED}" == "1" ]] && RUN_ARGS+=(--save-masked)
 
 attempt=0
 code=0
@@ -106,8 +110,12 @@ while true; do
   done
   wait "${pid}"
   code=$?
+  # Always reap the whole process group: a crashed run otherwise leaves its policy server
+  # (~1 GB GPU) orphaned, and the leak piles up into OOM / vk::DeviceLostError.
+  kill -9 -- "-${pid}" 2>/dev/null || true
   # Killed by the external watchdog -> same restart path as the in-process one (3).
-  [[ "${code}" -eq 137 ]] && code=3
+  # 137 = killed by the external watchdog; 134 = abort (vk::DeviceLostError on RTX 5090) -> restart
+  [[ "${code}" -eq 137 || "${code}" -eq 134 ]] && code=3
   set -e
   # 3 = stall watchdog fired; anything else is final.
   if [[ "${code}" -ne 3 ]]; then break; fi

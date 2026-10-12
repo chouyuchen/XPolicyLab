@@ -2,7 +2,8 @@
 # Naive long-horizon eval: PI1 (open) → PI2 (load) → PI3 (close).
 # SWITCH_MODE=flag|mock_vlm|vlm|value  (default flag = B1; value = B3: the open stage ends on
 #                                      the V ensemble's best handoff candidate and needs V_MODEL)
-# BRIDGE=none|scripted|retreat|partial|vsearch  (default none; scripted = release + 6cm back-off + home;
+# BRIDGE=none|scripted|retreat|partial|vsearch|release_only  (default none; release_only = open gripper only,
+#                                        the TFF-only ablation: with SWITCH_MODE=value V scores the current pose; scripted = release + 6cm back-off + home;
 #                                        retreat = no home; partial = scripted stopped BRIDGE_ALPHA of the way
 #                                        home, needs BRIDGE_ALPHA; vsearch = value-guided handoff search
 #                                        (escape the drawer collision, then try the best reachable
@@ -16,6 +17,15 @@
 #                      the load-stage DR), PERTURB_EE=CM (offset the left EE by U[-CM,CM]^3 cm)
 # Phase-3b: DRAWER_LIMIT=F (cap the drawer's travel at F of its range; F < 0.85 makes the
 #                      flag handoff unreachable)
+# Obstacles: OBSTACLES=privileged|perceived (default privileged = the simulator's cabinet
+#                      link AABBs; perceived = boxes merged from the head-camera depth cloud,
+#                      scripts/perceived_obstacles.py; adds "-pcd" to the run tag)
+# Phase-5 per-handoff switching: LOAD_SWITCH=flag|value (value ends the load stage on V3's
+#                      lower bound, needs V3_MODEL), BRIDGE23=none|vsearch (the value-guided
+#                      pi2->pi3 right-arm repair, needs V3_MODEL), V3_MODEL=path to the V3
+#                      model.pt (scripts/train_handoff_value.py --skill close --feature-set
+#                      ee_obj --arm right), optional V3_THRESHOLD / V3_KAPPA (default to
+#                      V_THRESHOLD / V_KAPPA).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -55,6 +65,12 @@ OBJECT_DR="${OBJECT_DR:-}"
 PERTURB_EE="${PERTURB_EE:-}"
 # Phase-3b drawer travel cap ("" = uncapped).
 DRAWER_LIMIT="${DRAWER_LIMIT:-}"
+# Planner obstacle source (step 3); changes the run tag, so it goes into both calls.
+OBSTACLES="${OBSTACLES:-privileged}"
+# Phase-5 per-handoff switching (defaults keep the pre-existing behaviour/tag).
+LOAD_SWITCH="${LOAD_SWITCH:-flag}"
+BRIDGE23="${BRIDGE23:-none}"
+V3_MODEL="${V3_MODEL:-}"
 # Anything but 0/1 would silently evaluate as false ("true", "yes"), so reject it.
 if [[ "${LOAD_EARLY_STOP}" != "0" && "${LOAD_EARLY_STOP}" != "1" ]]; then
   echo "[CHAIN] LOAD_EARLY_STOP must be 0 or 1 (got '${LOAD_EARLY_STOP}')" >&2
@@ -120,6 +136,35 @@ fi
 if [[ -n "${DRAWER_LIMIT}" ]]; then
   PERTURB_ARGS+=(--drawer-limit "${DRAWER_LIMIT}")
 fi
+# Phase-5 per-handoff switching; these change the run tag, so they go into both calls.
+case "${LOAD_SWITCH}" in flag|value) ;; *)
+  echo "[CHAIN] LOAD_SWITCH must be flag|value (got '${LOAD_SWITCH}')" >&2; exit 2 ;; esac
+case "${BRIDGE23}" in none|vsearch) ;; *)
+  echo "[CHAIN] BRIDGE23 must be none|vsearch (got '${BRIDGE23}')" >&2; exit 2 ;; esac
+PHASE5_ARGS=()
+if [[ "${LOAD_SWITCH}" == "value" || "${BRIDGE23}" == "vsearch" ]]; then
+  if [[ -z "${V3_MODEL}" ]]; then
+    echo "[CHAIN] LOAD_SWITCH=value / BRIDGE23=vsearch require V3_MODEL" >&2
+    exit 2
+  fi
+  PHASE5_ARGS+=(--v3-model "${V3_MODEL}")
+fi
+if [[ "${LOAD_SWITCH}" == "value" ]]; then PHASE5_ARGS+=(--load-switch value); fi
+if [[ "${BRIDGE23}" == "vsearch" ]]; then PHASE5_ARGS+=(--bridge23 vsearch); fi
+# Obstacle source; changes the run tag ("-pcd" for perceived), so both calls get it.
+case "${OBSTACLES}" in privileged|perceived) ;; *)
+  echo "[CHAIN] OBSTACLES must be privileged|perceived (got '${OBSTACLES}')" >&2; exit 2 ;; esac
+OBSTACLE_ARGS=(--obstacles "${OBSTACLES}")
+# V3 threshold/kappa override the V2 ones when set (they do not change the run tag).
+if [[ -n "${V3_THRESHOLD:-}" ]]; then PHASE5_ARGS+=(--v3-threshold "${V3_THRESHOLD}"); fi
+if [[ -n "${V3_KAPPA:-}" ]]; then PHASE5_ARGS+=(--v3-kappa "${V3_KAPPA}"); fi
+# Value switch sanity floor ("" = the switcher's default 0.3). ee_est reads the floor off the
+# scene estimator, which is ~0.15 high on a closed drawer, so a perception-only run needs it.
+V_MIN_OPEN_FRAC="${V_MIN_OPEN_FRAC:-}"
+if [[ -n "${V_MIN_OPEN_FRAC}" ]]; then PHASE5_ARGS+=(--v-min-open-frac "${V_MIN_OPEN_FRAC}"); fi
+# Value feature sets (ee = privileged drawer frac; ee_est / img_ee = from the head image).
+if [[ -n "${V_FEATURE_SET:-}" ]]; then PHASE5_ARGS+=(--v-feature-set "${V_FEATURE_SET}"); fi
+if [[ -n "${V3_FEATURE_SET:-}" ]]; then PHASE5_ARGS+=(--v3-feature-set "${V3_FEATURE_SET}"); fi
 # SAPIEN render hangs: kill after this many seconds without progress, then resume.
 STALL_TIMEOUT_SEC="${STALL_TIMEOUT_SEC:-600}"
 MAX_RESTARTS="${MAX_RESTARTS:-10}"
@@ -146,7 +191,9 @@ OUTPUT_DIR="$(python scripts/eval_cabinet_chain_naive.py --print-output-dir \
   --steer-k "${STEER_K}" \
   --transition-window "${TRANSITION_WINDOW}" \
   "${VALUE_ARGS[@]}" \
-  "${PERTURB_ARGS[@]}")"
+  "${PERTURB_ARGS[@]}" \
+  "${PHASE5_ARGS[@]}" \
+  "${OBSTACLE_ARGS[@]}")"
 echo "[CHAIN] output dir: ${OUTPUT_DIR}"
 
 RUN_ARGS=(
@@ -168,6 +215,8 @@ RUN_ARGS=(
   "${PHASE1_ARGS[@]}"
   "${VALUE_ARGS[@]}"
   "${PERTURB_ARGS[@]}"
+  "${PHASE5_ARGS[@]}"
+  "${OBSTACLE_ARGS[@]}"
 )
 
 attempt=0
@@ -203,8 +252,12 @@ while true; do
   done
   wait "${pid}"
   code=$?
+  # Always reap the whole process group: a crashed run otherwise leaves its policy server
+  # (~1 GB GPU) orphaned, and the leak piles up into OOM / vk::DeviceLostError.
+  kill -9 -- "-${pid}" 2>/dev/null || true
   # Killed by the external watchdog -> same restart path as the in-process one (3).
-  [[ "${code}" -eq 137 ]] && code=3
+  # 137 = killed by the external watchdog; 134 = abort (vk::DeviceLostError on RTX 5090) -> restart
+  [[ "${code}" -eq 137 || "${code}" -eq 134 ]] && code=3
   set -e
   # 3 = stall watchdog fired; anything else is final.
   if [[ "${code}" -ne 3 ]]; then break; fi
