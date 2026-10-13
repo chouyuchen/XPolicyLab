@@ -4,9 +4,9 @@
 # Kept environment variables (full reference + accepted values: see
 # RoboTwin_Cabinet_Objects_SkillChain.md §5.3):
 #   run:        TEST_NUM SEED_START TASK_CONFIG POLICY_GPU ENV_GPU VIDEO_SUBSTEP
-#               STALL_TIMEOUT_SEC MAX_RESTARTS STOP_AFTER LOAD_EARLY_STOP
+#               STALL_TIMEOUT_SEC MAX_RESTARTS STOP_AFTER LOAD_EARLY_STOP OUTPUT_ROOT
 #   handoff 1:  SWITCH_MODE BRIDGE BRIDGE_ALPHA OPEN_HANDOFF V_MODEL V_FEATURE_SET
-#               V_THRESHOLD V_KAPPA V_EXEC V_MIN_OPEN_FRAC OBSTACLES
+#               V_THRESHOLD V_KAPPA V_EXEC V_MIN_OPEN_FRAC OBSTACLES FLAG_SOURCE
 #   handoff 2:  LOAD_SWITCH BRIDGE23 V3_MODEL V3_FEATURE_SET V3_THRESHOLD V3_KAPPA
 #   perturb:    PERTURB_DRAWER OBJECT_DR PERTURB_EE DRAWER_LIMIT
 # Defaults live in the eval script's argparse; only the variables you set are forwarded.
@@ -32,6 +32,8 @@ case "${BRIDGE23:-none}" in none|vsearch) ;; *)
   echo "[CHAIN] BRIDGE23 must be none|vsearch (got '${BRIDGE23:-}')" >&2; exit 2 ;; esac
 case "${OBSTACLES:-privileged}" in privileged|perceived) ;; *)
   echo "[CHAIN] OBSTACLES must be privileged|perceived (got '${OBSTACLES:-}')" >&2; exit 2 ;; esac
+case "${FLAG_SOURCE:-sim}" in sim|perceived) ;; *)
+  echo "[CHAIN] FLAG_SOURCE must be sim|perceived (got '${FLAG_SOURCE:-}')" >&2; exit 2 ;; esac
 if [[ "${BRIDGE:-none}" == "partial" && -z "${BRIDGE_ALPHA:-}" ]]; then
   echo "[CHAIN] BRIDGE=partial requires BRIDGE_ALPHA (0..1)" >&2; exit 2
 fi
@@ -59,10 +61,12 @@ TASK_CONFIG:--task-config
 TEST_NUM:--test-num
 SEED_START:--seed-start
 POLICY_GPU:--policy-gpu
+OUTPUT_ROOT:--output-root
 SWITCH_MODE:--switch
 BRIDGE:--bridge
 BRIDGE_ALPHA:--bridge-alpha
 OPEN_HANDOFF:--open-handoff
+FLAG_SOURCE:--flag-source
 V_MODEL:--v-model
 V_THRESHOLD:--v-threshold
 V_KAPPA:--v-kappa
