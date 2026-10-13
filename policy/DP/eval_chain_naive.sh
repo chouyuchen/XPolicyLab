@@ -109,7 +109,7 @@ if [[ "${LOAD_EARLY_STOP}" == "1" ]]; then
   PHASE1_ARGS+=(--load-early-stop)
 fi
 # --switch value scores handoffs with the same ensemble as BRIDGE=vsearch, which already
-# passes these; adding them twice would only confuse the run tag's model field.
+# passes these, so they are only added here for the other bridges.
 VALUE_ARGS=()
 if [[ "${SWITCH_MODE}" == "value" ]]; then
   if [[ -z "${V_MODEL}" ]]; then
@@ -158,8 +158,8 @@ OBSTACLE_ARGS=(--obstacles "${OBSTACLES}")
 # V3 threshold/kappa override the V2 ones when set (they do not change the run tag).
 if [[ -n "${V3_THRESHOLD:-}" ]]; then PHASE5_ARGS+=(--v3-threshold "${V3_THRESHOLD}"); fi
 if [[ -n "${V3_KAPPA:-}" ]]; then PHASE5_ARGS+=(--v3-kappa "${V3_KAPPA}"); fi
-# Value switch sanity floor ("" = the switcher's default 0.3). ee_est reads the floor off the
-# scene estimator, which is ~0.15 high on a closed drawer, so a perception-only run needs it.
+# Value switch sanity floor ("" = the switcher's default 0.3). With V_FEATURE_SET=ee_est the
+# floor reads the scene estimator; the retrained estimator (closed-drawer frames) works at 0.3.
 V_MIN_OPEN_FRAC="${V_MIN_OPEN_FRAC:-}"
 if [[ -n "${V_MIN_OPEN_FRAC}" ]]; then PHASE5_ARGS+=(--v-min-open-frac "${V_MIN_OPEN_FRAC}"); fi
 # Value feature sets (ee = privileged drawer frac; ee_est / img_ee = from the head image).

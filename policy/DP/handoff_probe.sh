@@ -1,7 +1,8 @@
 #!/bin/bash
 # Phase 2a handoff probe: random left-arm handoff state -> successor DP label.
 # SKILL=load|close  N=episodes  SEED_START=first seed  OUTPUT_DIR=result dir (required)
-# SAMPLER=box|release (release = pi1's measured mean release pose; load/left only)
+# SAMPLER=box|release|handoff23 (release = pi1's measured mean release pose, load/left only;
+#         handoff23 = pi2's end pose, close/right)
 # POLICY_GPU=GPU id for the DP server (ENV_GPU selects the sim GPU).
 set -euo pipefail
 
@@ -24,7 +25,7 @@ DRAWER_FRAC_RANGE="${DRAWER_FRAC_RANGE:-}"
 PLAN_ONLY="${PLAN_ONLY:-0}"
 # PLAN_ATTEMPTS: resample a target the planner refuses (default 1 = no retry).
 PLAN_ATTEMPTS="${PLAN_ATTEMPTS:-1}"
-# SAMPLER: box (default) | release (pi1's measured mean release pose, load/left only).
+# SAMPLER: box (default) | release (load/left only) | handoff23 (close/right).
 SAMPLER="${SAMPLER:-box}"
 # SAVE_MASKED=1: also save the robot-masked head frame + mask at the handoff
 # (img/seed<seed>_masked.png, mask/seed<seed>.png) for the image-value feature sets.
